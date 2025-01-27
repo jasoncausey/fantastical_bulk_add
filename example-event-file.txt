@@ -1,0 +1,2 @@
+TEST EVENT ONE tomorrow at 9:00am
+TEST EVENT TWO next Wednesday at 9:00am alert 1 day before
