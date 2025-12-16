@@ -1,0 +1,2 @@
+tomorrow at 9:00am: TEST EVENT ONE | this is a note on event 1
+next Wednesday at 9:00am: TEST EVENT TWO, alert 1 day before | this is a note on event 2

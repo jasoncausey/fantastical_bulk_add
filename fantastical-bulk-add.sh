@@ -16,7 +16,18 @@ fi
 
 # add Fantastical event given text using fantastical-cli
 function do_add {
-  fantastical-cli $CALENDAR $@
+  local event_text="$1"
+  local args=()
+
+  if [[ "$event_text" == *"|"* ]]; then
+    local event_desc="${event_text%|*}"
+    local notes="${event_text#*|}"
+    args+=(-n "$notes" "$event_desc")
+  else
+    args+=("$event_text")
+  fi
+  
+  fantastical-cli $CALENDAR "${args[@]}"
 }
 
 while read event_text; do
