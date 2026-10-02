@@ -38,49 +38,51 @@ function do_add {
     fi
   done
 
-  local event_desc="$event_text"
   if (( sep >= 0 )); then
-    local notes
+    local event_desc notes
     event_desc="$(trim "${event_text:0:sep}")"
     notes="$(trim "${event_text:sep+1}")"
     if [ -n "$notes" ]; then
       args+=(-n "$notes")
     fi
+    args+=("$event_desc")
+  else
+    args+=("$event_text")
   fi
-
-  # optional availability modifier at the end of the description,
-  # e.g. ">>out-of-office" or '>> "out of office"'
-  # (ignored if the ">>" falls inside double quotes, i.e. an odd number of quotes precede it)
-  local avail_re='^(.*)>>[[:space:]]*("([[:alpha:] _-]+)"|([[:alpha:]_-]+))[[:space:]]*$'
-  local quotes_before
-  if [[ "$event_desc" =~ $avail_re ]] \
-      && quotes_before="${BASH_REMATCH[1]//[^\"]/}" \
-      && (( ${#quotes_before} % 2 == 0 )); then
-    local availability
-    event_desc="$(trim "${BASH_REMATCH[1]}")"
-    availability="$(printf '%s' "${BASH_REMATCH[3]}${BASH_REMATCH[4]}" | tr -d ' _-' | tr '[:upper:]' '[:lower:]')"
-    args+=(-a "$availability")
-  fi
-
-  args+=("$event_desc")
 
   fantastical-cli "${CALENDAR_ARGS[@]}" "${args[@]}"
 }
 
+if [ ! -r "$EVENT_FILE" ]; then
+  echo "Cannot read event file: $EVENT_FILE" >&2
+  exit 1
+fi
+
+added=0
+failed=()
 while read event_text || [ -n "${event_text}" ]; do
   # skip blank lines and comment lines
   if [[ -z "${event_text}" || "${event_text}" == \#* ]]; then
     continue
   fi
   echo "Adding event: \"${event_text}\""
-  do_add "${event_text}"
+  if do_add "${event_text}"; then
+    (( added++ ))
+  else
+    failed+=("${event_text}")
+  fi
 done <"$EVENT_FILE"
 
-[[ $? == 0 ]] && echo "Events added." || { echo "An error occurred."; exit 1; }
+echo "${added} event(s) sent to Fantastical."
+if (( ${#failed[@]} > 0 )); then
+  echo "${#failed[@]} event(s) failed:" >&2
+  printf '  %s\n' "${failed[@]}" >&2
+  exit 1
+fi
 
 
 # REFERENCE FOR fantastical-cli
-# usage: fantastical-cli [-h] [-n NOTES] [-c CALENDAR] [-a AVAILABILITY] [-g] [sentence ...]
+# usage: fantastical-cli [-h] [-n NOTES] [-c CALENDAR] [-g] [sentence ...]
 #
 # Add events to Fantastical using natural language input.
 #
@@ -94,8 +96,5 @@ done <"$EVENT_FILE"
 #                         Additional notes for the event
 #   -c CALENDAR, --calendar CALENDAR
 #                         Calendar to add the event to
-#   -a {free,busy,tentative,outofoffice,workingelsewhere}, --availability ...
-#                         Show the event as free, busy, tentative, outofoffice,
-#                         or workingelsewhere
 #   -g, --gui             Show the Fantastical UI to confirm before adding
 #                         (default is immediate add)
