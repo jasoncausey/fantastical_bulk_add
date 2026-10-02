@@ -38,17 +38,31 @@ function do_add {
     fi
   done
 
+  local event_desc="$event_text"
   if (( sep >= 0 )); then
-    local event_desc notes
+    local notes
     event_desc="$(trim "${event_text:0:sep}")"
     notes="$(trim "${event_text:sep+1}")"
     if [ -n "$notes" ]; then
       args+=(-n "$notes")
     fi
-    args+=("$event_desc")
-  else
-    args+=("$event_text")
   fi
+
+  # optional availability modifier at the end of the description,
+  # e.g. ">>out-of-office" or '>> "out of office"'
+  # (ignored if the ">>" falls inside double quotes, i.e. an odd number of quotes precede it)
+  local avail_re='^(.*)>>[[:space:]]*("([[:alpha:] _-]+)"|([[:alpha:]_-]+))[[:space:]]*$'
+  local quotes_before
+  if [[ "$event_desc" =~ $avail_re ]] \
+      && quotes_before="${BASH_REMATCH[1]//[^\"]/}" \
+      && (( ${#quotes_before} % 2 == 0 )); then
+    local availability
+    event_desc="$(trim "${BASH_REMATCH[1]}")"
+    availability="$(printf '%s' "${BASH_REMATCH[3]}${BASH_REMATCH[4]}" | tr -d ' _-' | tr '[:upper:]' '[:lower:]')"
+    args+=(-a "$availability")
+  fi
+
+  args+=("$event_desc")
 
   fantastical-cli "${CALENDAR_ARGS[@]}" "${args[@]}"
 }
@@ -66,7 +80,7 @@ done <"$EVENT_FILE"
 
 
 # REFERENCE FOR fantastical-cli
-# usage: fantastical-cli [-h] [-n NOTES] [-c CALENDAR] [-g] [sentence ...]
+# usage: fantastical-cli [-h] [-n NOTES] [-c CALENDAR] [-a AVAILABILITY] [-g] [sentence ...]
 #
 # Add events to Fantastical using natural language input.
 #
@@ -80,5 +94,8 @@ done <"$EVENT_FILE"
 #                         Additional notes for the event
 #   -c CALENDAR, --calendar CALENDAR
 #                         Calendar to add the event to
+#   -a {free,busy,tentative,outofoffice,workingelsewhere}, --availability ...
+#                         Show the event as free, busy, tentative, outofoffice,
+#                         or workingelsewhere
 #   -g, --gui             Show the Fantastical UI to confirm before adding
 #                         (default is immediate add)
