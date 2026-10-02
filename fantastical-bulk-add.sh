@@ -1,38 +1,62 @@
 #!/usr/bin/env bash
 
-if [ -z ${1} ]; then
+if [ -z "${1}" ]; then
   echo "File with events listed one per line required."
   exit 1
 fi
 
 EVENT_FILE="${1}"
 
-CALENDAR=""
+CALENDAR_ARGS=()
 
 # Second argument is (optionally) calendar name
-if [ ! -z ${2} ]; then
-  CALENDAR="-c \"${2}\""
+if [ -n "${2}" ]; then
+  CALENDAR_ARGS=(-c "${2}")
 fi
+
+# strip leading and trailing whitespace
+function trim {
+  local s="$1"
+  s="${s#"${s%%[![:space:]]*}"}"
+  s="${s%"${s##*[![:space:]]}"}"
+  printf '%s' "$s"
+}
 
 # add Fantastical event given text using fantastical-cli
 function do_add {
   local event_text="$1"
   local args=()
+  local in_quotes=0 sep=-1 i ch
 
-  if [[ "$event_text" == *"|"* ]]; then
-    local event_desc="${event_text%|*}"
-    local notes="${event_text#*|}"
-    args+=(-n "$notes" "$event_desc")
+  # find the last pipe that is not inside double quotes
+  for (( i = 0; i < ${#event_text}; i++ )); do
+    ch="${event_text:i:1}"
+    if [[ "$ch" == '"' ]]; then
+      in_quotes=$(( !in_quotes ))
+    elif [[ "$ch" == "|" && $in_quotes == 0 ]]; then
+      sep=$i
+    fi
+  done
+
+  if (( sep >= 0 )); then
+    local event_desc notes
+    event_desc="$(trim "${event_text:0:sep}")"
+    notes="$(trim "${event_text:sep+1}")"
+    if [ -n "$notes" ]; then
+      args+=(-n "$notes")
+    fi
+    args+=("$event_desc")
   else
     args+=("$event_text")
   fi
-  
-  fantastical-cli $CALENDAR "${args[@]}"
+
+  fantastical-cli "${CALENDAR_ARGS[@]}" "${args[@]}"
 }
 
-while read event_text; do
-  if [ -z "${event_text}" ]; then
-    break
+while read event_text || [ -n "${event_text}" ]; do
+  # skip blank lines and comment lines
+  if [[ -z "${event_text}" || "${event_text}" == \#* ]]; then
+    continue
   fi
   echo "Adding event: \"${event_text}\""
   do_add "${event_text}"
